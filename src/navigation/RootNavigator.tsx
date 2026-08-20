@@ -27,9 +27,9 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 //
 // Faz 3b: ExhibitionList -> Gallery is the real navigation flow — pick a
 // backend exhibition, walk its actual 3D room. Gallery hides its header
-// (GalleryScreen draws its own translucent overlay header + back button,
-// see HEADER_HEIGHT) since the native stack header would eat into the
-// touch-look zone and duplicate the back control.
+// (GalleryScreen draws its own small floating back button instead, plus
+// hides the OS status bar and Android nav bar — the walkable room should
+// read as full-screen, not share the frame with any chrome).
 export function RootNavigator() {
   return (
     <Stack.Navigator>

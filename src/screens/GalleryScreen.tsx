@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import * as NavigationBar from 'expo-navigation-bar';
+import { StatusBar } from 'expo-status-bar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -15,8 +17,6 @@ import TouchPlayer, { type TouchControlState } from '../components/3d/TouchPlaye
 import TouchControls from '../components/3d/TouchControls';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Gallery'>;
-
-const HEADER_HEIGHT = 56;
 
 /**
  * Faz 3b: the real native-rendered 3D gallery, backend-driven — mirrors web's
@@ -56,6 +56,24 @@ export function GalleryScreen({ route, navigation }: Props) {
     };
   }, []);
 
+  // Full-screen/immersive: the walkable room should fill the entire panel,
+  // not share it with the OS status bar and (on Android) the on-screen nav
+  // bar — both were visible in an early device test and made the 3D view
+  // feel like a cropped strip rather than a real space. `setBehaviorAsync`
+  // makes the Android bars swipe-revealable instead of gone-for-good, so a
+  // stray edge swipe doesn't strand the user with no way back to them.
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      NavigationBar.setVisibilityAsync('hidden');
+      NavigationBar.setBehaviorAsync('overlay-swipe');
+    }
+    return () => {
+      if (Platform.OS === 'android') {
+        NavigationBar.setVisibilityAsync('visible');
+      }
+    };
+  }, []);
+
   const controlState = useRef<TouchControlState>({ move: { x: 0, y: 0 }, look: { dx: 0, dy: 0 } });
   const [nearestArtworkId, setNearestArtworkId] = useState<string | null>(null);
   const nearestArtwork = useMemo(
@@ -81,6 +99,7 @@ export function GalleryScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.container}>
+      <StatusBar hidden />
       <Canvas
         dpr={1}
         camera={{ fov: 65, near: 0.1, far: 100, position: layout.playerStart }}
@@ -96,16 +115,16 @@ export function GalleryScreen({ route, navigation }: Props) {
         </ExhibitionProvider>
       </Canvas>
 
-      <TouchControls controlState={controlState} topInset={HEADER_HEIGHT} />
+      <TouchControls controlState={controlState} />
 
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
-          <Text style={styles.headerButtonText}>{t('galleryBack')}</Text>
-        </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {exhibition.name}
-        </Text>
-      </View>
+      {/* Small floating control, not a chrome bar — the room should read as
+          full-screen. No title text either (see exhibition.name removal):
+          it duplicated what the info card already shows once you're near a
+          wall, and permanent on-screen text worked against the "just the
+          room" ask this replaced a taller opaque header bar for. */}
+      <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backButton}>
+        <Text style={styles.backButtonText}>{t('galleryBack')}</Text>
+      </Pressable>
 
       {nearestArtwork && (
         <View pointerEvents="none" style={styles.infoCard}>
@@ -123,20 +142,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1f1610' },
   centerText: { color: '#e9dcc2' },
-  header: {
+  backButton: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: HEADER_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
   },
-  headerButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  headerTitle: { color: '#fff', fontSize: 15, flexShrink: 1 },
+  backButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   infoCard: {
     position: 'absolute',
     left: 16,
