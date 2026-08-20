@@ -1,0 +1,38 @@
+// Mirrors vea-frontend/src/lib/api/domains/auth.ts byte-for-byte. Auth
+// doesn't fit the generic CRUD factory (request-code/verify-code aren't
+// create/update/remove on a resource), so these are hand-written
+// mutations/query on top of the same get/post primitives from ../client.
+import { Paths } from '../paths';
+import { get, post } from '../client';
+import { useMutation, useQuery, type UseQueryOptions } from '@tanstack/react-query';
+
+export interface ApiUser {
+  id: string;
+  email: string;
+  phone: string | null;
+  role: 'VISITOR' | 'ARTIST' | 'INSTITUTION' | 'ADMIN';
+  createdAt: string;
+}
+
+export function useRequestCode() {
+  return useMutation({
+    mutationFn: (email: string) => post<{ status: string }>({ path: Paths.AuthRequestCode, payload: { email } }),
+  });
+}
+
+export function useVerifyCode() {
+  return useMutation({
+    mutationFn: ({ email, code }: { email: string; code: string }) =>
+      post<{ accessToken: string }>({ path: Paths.AuthVerifyCode, payload: { email, code } }),
+  });
+}
+
+export function useCurrentUser(options?: Omit<UseQueryOptions<ApiUser>, 'queryKey' | 'queryFn'>) {
+  return useQuery<ApiUser>({
+    queryKey: [Paths.AuthMe],
+    queryFn: () => get<ApiUser>({ path: Paths.AuthMe }),
+    staleTime: 60_000,
+    retry: false,
+    ...options,
+  });
+}

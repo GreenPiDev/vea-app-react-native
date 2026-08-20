@@ -1,1 +1,68 @@
-@AGENTS.md
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Proje
+
+`vea-app-react-native` — vea platformunun (bkz. root `../CLAUDE.md`) mobil istemcisi, React Native + Expo ile `vea-api`'ye karşı yazılıyor. **2026-08-20'de karar verildi:** `vea-frontend`'de web tarafı Faz 3'e (3D sahne↔backend bağlama) geçmeden önce mobil track başlatılıyor — kullanıcının gerekçesi: web'de daha ileri gidilirse aynı ürünü mobilde eş zamanlı tutmak zorlaşacaktı, bu yüzden mobil temel şimdi, web henüz nispeten basit (Auth + non-3D panel) iken atılıyor. Faz 0 tamamlandı: Expo `blank-typescript` template ile scaffold edildi.
+
+Bu proje hakkında genel vizyon/kapsam için root `../CLAUDE.md`'ye bak — burada tekrar edilmiyor. `AGENTS.md` Expo'nun template'iyle gelen genel bir hatırlatma (Expo SDK sık değişiyor, kod yazmadan önce `https://docs.expo.dev/versions/v57.0.0/`'daki versiyonlu docs'a bak) — proje-özgü kararlar için asıl kaynak bu dosya.
+
+## Kütüphane/mimari kararları (2026-08-20)
+
+Prensip: **web ile birebir kütüphane paritesi, RN'in native eşdeğeri neyse o**. Kod paylaşımı için monorepo/shared-package YOK (vea-frontend/vea-api de ayrı repo/ayrı kod olarak tutuluyor, aynı konvansiyon) — dosya şekilleri (`Paths`, `client.ts`, `factory.ts`, `domains/*.ts`, `SOCKET_EVENTS`, i18n JSON) elle mirror edilecek, tıpkı `vea-frontend`↔`vea-api` arasında zaten yapıldığı gibi.
+
+| Katman | vea-frontend (web) | vea-app-react-native (mobil) | Not |
+|---|---|---|---|
+| Framework | React 19 + Vite | React Native + **Expo** (managed/dev client) | Expo: solo/küçük ekip için hızlı iterasyon, OTA update, native modül gerektiğinde prebuild'e geçilebilir — baştan bare RN'e gerek yok |
+| Dil | TypeScript | TypeScript | aynı |
+| Server state | TanStack Query (`@tanstack/react-query`) | **TanStack Query** | 1:1 aynı kütüphane, RN'de değişiklik gerekmiyor |
+| API katmanı | `src/lib/api/` (`paths.ts`, `client.ts` fetch wrapper, `factory.ts` generic hooks, `domains/*.ts`) | **aynı dosya şekli mirror edilecek** | tek fark: token depolama `localStorage` yerine `expo-secure-store` |
+| Realtime | `socket.io-client` + `src/lib/socket/` (`SOCKET_EVENTS`, `socketClient.ts`, `useRealtimeQuerySync.ts`) | **`socket.io-client` aynen çalışıyor RN'de**, aynı dosya şekli mirror edilecek | `SOCKET_EVENTS` artık **3 repo arasında** elle senkron tutulmalı (vea-api, vea-frontend, vea-app-react-native) |
+| Navigasyon | yok (App.tsx `screen` state ile ekran değişimi, router yok) | **React Navigation** (stack, gerekirse tab) | web'de router olmaması bilinçli bir tercihti (basit kapsam); RN'de OS-native geri tuşu/derinlik yönetimi için navigation kütüphanesi gerekli — bu tek gerçek sapma |
+| Styling | Tailwind CSS v4 (`@tailwindcss/vite`), merkezi `brand-*` paleti `src/index.css`'te `@theme` | **NativeWind** (Tailwind-for-RN) | aynı utility-class zihin modeli, aynı `brand-*` palette değerleri `tailwind.config.js`'te mirror edilecek (bkz. [[feedback_centralized_color_palette]]) — asla ham hex/varsayılan `neutral-*` kullanılmayacak |
+| i18n | i18next + react-i18next, `src/locales/<lang>/translation.json` flat | **i18next + react-i18next + `expo-localization`** (cihaz dili algılama için) | aynı flat JSON şekli, aynı key convention (bkz. [[feedback_i18n_file_convention]], [[feedback_no_static_ui_text]]) — bu kural mobilde de mutlak: hiç statik UI metni yok |
+| Auth token storage | `localStorage` | **`expo-secure-store`** | RN'de token'lar plaintext AsyncStorage'da değil, native keychain/keystore destekli secure store'da tutulacak — bu güvenlik gereği bir sapma, kütüphane parite tercihi değil |
+| Test (unit/logic) | Vitest + `@testing-library/react` + jsdom | **Jest + `@testing-library/react-native`** | RN ekosisteminin standardı; Vitest RN'i native desteklemiyor |
+| Test (UI/e2e flow) | yok (manuel tarayıcı testi) | **Maestro** | YAML tabanlı, Detox'a göre kurulumu çok daha hafif (Xcode/Android native build zinciri gerekmiyor), tek başına mobil deneyimi olmayan bir ekip için daha sürdürülebilir. Golden path + edge case akışları (bkz. [[feedback_write_tests]]) buradan sürülecek. |
+| 3D sahne (`react-three-fiber`) | var, `src/components/3d/`, DOM/WebGL, `PointerLockControls`+WASD | **VAR — native R3F**, `@react-three/fiber` (native renderer) + `expo-gl` + `expo-asset` + `three` | aşağıda detaylandırıldı |
+
+### 3D sahne — mobilde de TAM gezilebilir galeri (2026-08-20'de netleşti, önceki "kapsam dışı" varsayımı iptal edildi)
+
+**Müşteri gereksinimi kesin: hem web hem mobil kullanıcı, adminin web panelinden oluşturduğu aynı sergiyi gerçek 3D olarak gezebilecek** — kart/liste görünümü YOK, platformlar arası deneyim paritesi şart. Performans zorunlu (bkz. [[feedback_performance_first]]).
+
+- **Render:** WebView içine web sahnesini gömmek YOK — GL context WebView katmanından geçmediği için ekstra gecikme/kopukluk yaratır ve native his vermez. Bunun yerine `@react-three/fiber`'ın native (RN) renderer'ı, `expo-gl` (native GL context) + `expo-asset`/`expo-file-system` (doku yükleme) ile gerçek native GPU render kullanılacak.
+- **Geometri/collider mantığı:** `vea-frontend/src/components/3d/galleryLayout.ts` React/DOM/Three'a bağımlı olmayan saf TS — bu dosya **mirror edilecek** (tek doğruluk kaynağı ilkesi iki kopya halinde korunuyor, tıpkı `SOCKET_EVENTS`/i18n JSON gibi elle senkron). Backend veri adaptörü de aynı şekilde: web Faz 3'te yazılacak `sceneConfig`/`positionData` → renderable `Artwork[]` adaptör mantığı mobilde mirror edilecek — **bu yüzden mobil 3D fazı, web Faz 3'ün veri sözleşmesi netleşmeden başlayamaz** (bkz. [[project_frontend_integration_roadmap]] — `sceneConfig`/`positionData` şekilleri zaten netleşti, sadece implementasyon bekliyor).
+- **Kontroller — web'den sapma:** `PointerLockControls` + WASD mobilde anlamsız (dokunmatik ekran, fare yok). Yeni bir touch controller yazılacak: sol alt sanal joystick (hareket, `dx`/`dz`) + sağ yarı ekran sürükle-bak (kamera rotasyonu). Collision/slide mantığı (`Player.tsx`'teki per-axis AABB check) aynı `COLLIDERS` verisiyle mirror edilecek, sadece girdi kaynağı değişiyor.
+- **Performans:** Doku boyutu/LOD, `expo-gl` frame budget, Android/iOS orta segment cihazlarda test — bu implementasyon detayları ilgili fazda ele alınacak, şimdiden aşırı mühendislik yapılmayacak (bkz. [[feedback_performance_first]] — önce doğru yaklaşım seçilir, sonradan "çalıştır sonra optimize et" değil, ama mikro-optimizasyon fazdan önce değil).
+- **VR ile karışmasın:** Bu native 3D walkable galeri MVP kapsamında — proje vizyonundaki ayrı "VR desteği" ileri fazı (headset/immersive) ile karıştırılmamalı, o hâlâ ayrı ve sonraki bir faz.
+
+## Faz Planı (web'deki [[project_frontend_integration_roadmap]] ile aynı artımlı/test-önce yaklaşım)
+
+Her fazda: önce ilgili backend endpoint'i `../vea-api/CLAUDE.md`'den teyit edilecek, sonra kod + birim testi + (varsa) Maestro akışı yazılacak, **golden path ve edge case'ler gerçek cihaz/simülatörde doğrulanmadan bir sonraki faza geçilmeyecek** (bkz. [[feedback_write_tests]]).
+
+- **Faz 0 — Proje temeli: TAMAMLANDI (2026-08-20).** Expo `blank-typescript` scaffold + NativeWind (Tailwind v3 config — NativeWind henüz Tailwind v4'ü desteklemiyor, web'den sapma) + `brand-*` palet mirror (`tailwind.config.js`) + React Navigation iskeleti (`src/navigation/RootNavigator.tsx`, tek `Home` ekranı) + TanStack Query/`src/lib/api/` (paths/client/factory/domains/auth) + `src/lib/auth/AuthContext.tsx` (async `expo-secure-store` token okuması, web'den kaçınılmaz sapma) + `src/lib/socket/` mirror + i18next + `expo-localization` (cihaz dili) + `tr`/`en` flat JSON (şimdilik sadece `auth*` anahtarları — panel anahtarları Faz 5 netleşince eklenecek) + Jest(`jest-expo`) + `@testing-library/react-native` kuruldu, `App.test.tsx` + `auth.test.tsx` yeşil (`npm test`), `npx tsc --noEmit` temiz, hem iOS hem web Metro bundle'ı doğrulandı (`npx expo export --platform ios|web`). Maestro henüz kurulmadı (Faz 1'in Auth ekranları yazılınca, test edilecek gerçek bir akış olduğunda eklenecek — henüz UI yok).
+- **Faz 1 — Auth (email OTP): TAMAMLANDI (2026-08-20).** `src/screens/LoginScreen.tsx` (web `Login.tsx`'ten adapte, iki adım email→kod) + `src/screens/HomeScreen.tsx`'e web `AuthBar.tsx`'in eşdeğeri auth kontrolü (sağ üst köşe, giriş yap / email+çıkış) eklendi. Sunum farkı: web modal overlay kullanıyor, mobilde `RootNavigator`'da `Login` ekranı `presentation: 'modal'` olarak push ediliyor — React Navigation'ın native eşdeğeri. `App.integration.test.tsx`: golden path (kod iste→doğrula→authenticated olur) + edge case (yanlış kod hatası) + "token yokken /auth/me çağrılmıyor" — hepsi mocked fetch ile yeşil. Ayrıca gerçek `vea-api`'ye karşı curl ile uçtan uca doğrulandı (`/auth/request-code` → `MailService` log'undan kod okunup `/auth/verify-code`'a gönderildi, `accessToken` döndü — response şekli mobil `client.ts`'in beklentisiyle birebir uyuştu). Maestro henüz kurulmadı — gerçek simülatör/cihazda dokunmatik akış kullanıcı tarafından test edilmeli (bkz. aşağıdaki test-ortamı notu).
+
+  **Test-ortamı notu (RNTL quirk):** `Pressable`'ın `disabled` prop'u bir kardeş `TextInput`'un state'ine bağlıysa, aynı `act()` turunda hemen ardından gelen `fireEvent.press` bazen tetiklenmiyor — RNTL/test-renderer'a özgü bir mikro-task zamanlama sorunu (gerçek cihazda dokunma olayları JS state'i oturduktan sonra native taraftan geldiği için sorun yok). `App.integration.test.tsx`'teki `flush()` yardımcı fonksiyonu (`waitFor(() => {})`) bu tür `changeText` sonrası `press` çağrılarından önce kullanılmalı — vea-frontend'deki pointer-lock kısıtına benzer, bu kod tabanına özgü bir test altyapısı notu.
+
+  **Görsel doğrulama (2026-08-20):** iOS/Android simülatörü bu makinede kurulu değil (Xcode/Android Studio yok — kullanıcı uzaktan bağlandığı için büyük indirme kurulumu ertelendi, bkz. [[project_mobile_app_roadmap]]). Ara çözüm: `npx expo start --web` + Chrome ile tüm auth akışı (giriş, sayfa yenilemede oturum kalıcılığı, çıkış, yanlış kod edge case'i) gerçek `vea-api`'ye karşı görsel olarak doğrulandı, hepsi beklendiği gibi çalıştı. Bu sırada gerçek bir cross-platform bulgu çıktı: **`expo-secure-store`'un web implementasyonu yok** (`ExpoSecureStore.web.ts` boş modül — native keychain/keystore web'de kavramsal olarak yok, bug değil, tasarım). `src/lib/api/authToken.ts`'e `Platform.OS === 'web'` durumunda `localStorage` fallback'i eklendi — sadece debug/preview amaçlı web hedefinde, iOS/Android hâlâ gerçek `SecureStore` kullanıyor. **Native simülatörde henüz test edilmedi** — dokunmatik etkileşim/native modal sunumu/gerçek keychain davranışı gibi web'de temsil edilemeyen kısımlar kullanıcı tarafından ya da simülatör kurulunca doğrulanmalı.
+- **Faz 2 — `expo-gl` + native R3F render zinciri kanıtlama (spike): TAMAMLANDI, gerçek cihazda doğrulandı (2026-08-20).** `expo-gl`+`expo-asset`+`expo-file-system`+`three`+`@react-three/fiber@^9.7.0` kuruldu (web'deki sürümle aynı `@react-three/fiber`, paket kendi `react-native` alanı sayesinde Metro native platformlarda otomatik native reconciler'a yönleniyor — ayrı bir `/native` importuna gerek yok). `src/screens/ThreeDSpikeScreen.tsx`: dönen tek bir küp + canlı FPS sayacı (`useFrame` tabanlı, backend'den bağımsız). `RootNavigator`'a dev-only `ThreeDSpike` route'u + Home'da "3D Spike (dev)" butonu eklendi (Faz 3'te gerçek galeri ekranı gelince kaldırılacak).
+
+  **Gerçek Android cihazda Expo Go üzerinden test edildi: 120 fps** (yüksek yenileme hızlı ekran, hedef ≥60 fps'in oldukça üstünde) — native GL render zinciri kanıtlandı, risk kapatıldı. Test için `npx expo start --tunnel` kullanıldı (kullanıcı evden uzaktaydı, aynı Wi-Fi'de değildi — `exp://` public link üzerinden Expo Go'ya "Enter URL manually" ile bağlandı). **SDK notu:** proje Expo SDK 57'den **56'ya**, sonra kullanıcının telefonundaki Expo Go'nun desteklediği **54'e** indirildi (`npx expo install --fix` ile tüm expo-* paketleri+react/react-native uyumlu sürümlere hizalandı — SDK 57 henüz Play Store'daki Expo Go'ya yansımamıştı). Downgrade sonrası test paketi (7/7) + `tsc --noEmit` + iOS/Android Metro export'u tekrar doğrulandı, hiçbir şey bozulmadı.
+- **Faz 3 — Gerçek 3D galeri, backend veriyle:** `galleryLayout.ts` + `COLLIDERS` mirror, touch controller (sanal joystick + sürükle-bak), backend `sceneConfig`/`positionData` adaptörü (web Faz 3 ile aynı sözleşme — bkz. [[project_frontend_integration_roadmap]]). **Bu faz web Faz 3'ün veri şekli implementasyonuna bağımlı**, paralel/senkronize ilerlenmeli. Golden path: sergiye gir, duvarlar arası yürü, esere yaklaş, bilgi kartını gör. Edge case: boş sergi, tek duvarlı custom oda, düşük bant genişliği ile doku yükleme.
+- **Faz 4 — Teklif (Offer) akışı:** eserdeki bilgi kartından teklif verme, teklif durumu takibi. Auth'a bağımlı.
+- **Faz 5 — Sanatçı paneli (mobilde gerekip gerekmediği TEYİT EDİLMEDİ):** web'de zaten var (`ArtistPanel`); mobilde de gerekli mi yoksa sanatçı yönetimi sadece web'de mi kalacak — kullanıcıyla netleştirilecek, kör kör mirror edilmeyecek.
+- **Faz 6 — Realtime ziyaretçi sayacı:** `useExhibitionVisitorCount` mirror, sahnenin üstünde HUD overlay.
+- **Faz 7 — Push notification (mobile-native, web'de karşılığı yok):** teklif/satış bildirimleri için `expo-notifications` — backlog, henüz planlanmadı.
+
+## Komutlar
+
+```bash
+npx expo start      # dev server (Expo Go veya dev client ile aç)
+npm run android      # Android emulator/cihaz
+npm run ios          # iOS simulator (macOS gerekli)
+npm run web          # tarayıcıda önizleme (3D fazından önce debug için kullanışlı olabilir)
+```
+
+Test/Maestro komutları Faz 0'ın devamında (Jest+RNTL+Maestro kurulunca) buraya eklenecek.
