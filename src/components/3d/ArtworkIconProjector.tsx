@@ -22,6 +22,8 @@ export interface ArtworkIconPosition {
 const OFFSCREEN_MARGIN = 40;
 /** Recomputed at ~10Hz, not every frame — icon markers don't need 60fps tracking precision, and this keeps the RN overlay's re-render rate cheap. */
 const UPDATE_INTERVAL = 0.1;
+/** Floor-plane distance (meters) the player must be within for a painting's icon to appear — client feedback (2026-08-20): icons should only show up in front of the actual painting, not for every painting visible anywhere in the room. */
+const APPEAR_RADIUS = 3.5;
 
 export default function ArtworkIconProjector({
   onPositionsChange,
@@ -50,6 +52,10 @@ export default function ArtworkIconProjector({
       const marginX = width / 2 + 0.08;
       const marginY = artwork.height / 2 + 0.08;
 
+      const dx = camera.position.x - artwork.position[0];
+      const dz = camera.position.z - artwork.position[2];
+      const nearEnough = dx * dx + dz * dz <= APPEAR_RADIUS * APPEAR_RADIUS;
+
       vector.current.set(
         artwork.position[0] + cos * marginX,
         artwork.position[1] + marginY,
@@ -66,7 +72,7 @@ export default function ArtworkIconProjector({
         y > -OFFSCREEN_MARGIN &&
         y < size.height + OFFSCREEN_MARGIN;
 
-      return { id: artwork.id, x, y, visible: !behindCamera && onScreen };
+      return { id: artwork.id, x, y, visible: nearEnough && !behindCamera && onScreen };
     });
 
     onPositionsChange(positions);

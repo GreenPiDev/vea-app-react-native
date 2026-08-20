@@ -15,7 +15,11 @@ import * as THREE from 'three';
 import { EYE_HEIGHT, PLAYER_RADIUS, type ColliderBox } from '../../lib/gallery/galleryLayout';
 import { useExhibition } from './ExhibitionContext';
 
-const WALK_SPEED = 3.6;
+// Web's Player.tsx uses 3.6 (m/s), but that's driven by binary WASD
+// key-down/up; the joystick gives a continuous analog push that players
+// tend to hold at full tilt, which read as noticeably too fast on a real
+// device (client feedback, 2026-08-20) — slowed down for touch input.
+const WALK_SPEED = 1.8;
 const LOOK_SENSITIVITY = 0.006; // radians per drag pixel
 const MAX_PITCH = 1.3; // radians, clear of straight up/down
 
