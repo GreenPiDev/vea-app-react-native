@@ -1,9 +1,11 @@
 import './global.css';
 import './src/lib/i18n';
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NavigationContainer } from '@react-navigation/native';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { AuthProvider } from './src/lib/auth/AuthContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 
@@ -15,6 +17,14 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 const queryClient = new QueryClient();
 
 export default function App() {
+  // app.json's "orientation" is "default" (unrestricted) so GalleryScreen
+  // can runtime-lock to landscape (wider FOV for the 3D walk) — everything
+  // else in the app is portrait-only by policy, enforced here instead of at
+  // the native-shell level, and restored by GalleryScreen on exit.
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+  }, []);
+
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>

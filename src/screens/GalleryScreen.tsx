@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -41,6 +42,19 @@ export function GalleryScreen({ route, navigation }: Props) {
         : null,
     [exhibition]
   );
+
+  // The gallery is meaningfully more usable in landscape (wider FOV, room
+  // for the joystick/look-pad split either side of the frame) — lock it on
+  // entry, restore the app-wide portrait lock (set in App.tsx) on exit so
+  // the rest of the app (list screens, forms) stays portrait-only. app.json's
+  // "orientation" is "default" (not "portrait") specifically so this native
+  // shell-level lock is actually overridable at runtime here.
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    };
+  }, []);
 
   const controlState = useRef<TouchControlState>({ move: { x: 0, y: 0 }, look: { dx: 0, dy: 0 } });
   const [nearestArtworkId, setNearestArtworkId] = useState<string | null>(null);

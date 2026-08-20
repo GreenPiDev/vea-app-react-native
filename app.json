@@ -3,7 +3,7 @@
     "name": "vea-app-react-native",
     "slug": "vea-app-react-native",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
