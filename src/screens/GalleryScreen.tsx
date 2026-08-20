@@ -94,7 +94,11 @@ export function GalleryScreen({ route, navigation }: Props) {
   if (isLoading) {
     return (
       <View style={styles.center}>
+        <StatusBar hidden />
         <ActivityIndicator />
+        <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backButton}>
+          <Text style={styles.backButtonText}>{t('galleryBack')}</Text>
+        </Pressable>
       </View>
     );
   }
@@ -102,7 +106,11 @@ export function GalleryScreen({ route, navigation }: Props) {
   if (!exhibition || !layout) {
     return (
       <View style={styles.center}>
+        <StatusBar hidden />
         <Text style={styles.centerText}>{t('galleryUnavailable')}</Text>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backButton}>
+          <Text style={styles.backButtonText}>{t('galleryBack')}</Text>
+        </Pressable>
       </View>
     );
   }
