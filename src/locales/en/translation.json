@@ -11,5 +11,14 @@
   "authUseDifferentEmail": "Use a different email",
   "authErrorSendFailed": "Could not send the code",
   "authErrorVerifyFailed": "Could not verify the code",
-  "authLogout": "Sign Out"
+  "authLogout": "Sign Out",
+
+  "homeBrowseExhibitions": "Browse Exhibitions",
+  "homeThreeDSpikeDev": "3D Spike (dev)",
+
+  "exhibitionListTitle": "Exhibitions",
+  "exhibitionListEmpty": "No published exhibitions yet.",
+
+  "galleryBack": "← Back",
+  "galleryUnavailable": "This exhibition can't be displayed yet."
 }

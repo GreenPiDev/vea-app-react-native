@@ -11,5 +11,14 @@
   "authUseDifferentEmail": "Farklı e-posta kullan",
   "authErrorSendFailed": "Kod gönderilemedi",
   "authErrorVerifyFailed": "Kod doğrulanamadı",
-  "authLogout": "Çıkış Yap"
+  "authLogout": "Çıkış Yap",
+
+  "homeBrowseExhibitions": "Sergileri Gör",
+  "homeThreeDSpikeDev": "3D Deneme (geliştirici)",
+
+  "exhibitionListTitle": "Sergiler",
+  "exhibitionListEmpty": "Henüz yayınlanmış sergi yok.",
+
+  "galleryBack": "← Geri",
+  "galleryUnavailable": "Bu sergi henüz görüntülenemiyor."
 }

@@ -21,9 +21,13 @@ export function HomeScreen({ navigation }: Props) {
       <Text className="text-2xl font-semibold text-brand-900">{t('authTitle')}</Text>
       <Text className="mt-2 text-brand-600">vea-app-react-native — Faz 2</Text>
 
-      {/* Dev-only entry to the Faz 2 native R3F spike — removed once Faz 3 has a real gallery screen */}
-      <Pressable testID="home-3d-spike" onPress={() => navigation.navigate('ThreeDSpike')} className="mt-4 rounded-md bg-brand-700 px-3 py-1.5">
-        <Text className="text-sm font-medium text-white">3D Spike (dev)</Text>
+      <Pressable testID="home-exhibitions" onPress={() => navigation.navigate('ExhibitionList')} className="mt-4 rounded-md bg-brand-700 px-3 py-1.5">
+        <Text className="text-sm font-medium text-white">{t('homeBrowseExhibitions')}</Text>
+      </Pressable>
+
+      {/* Dev-only entry to the Faz 2 native R3F spike — a minimal render-chain smoke test, kept around after Faz 3's real gallery screen shipped */}
+      <Pressable testID="home-3d-spike" onPress={() => navigation.navigate('ThreeDSpike')} className="mt-2 rounded-md bg-brand-200 px-3 py-1.5">
+        <Text className="text-sm font-medium text-brand-900">{t('homeThreeDSpikeDev')}</Text>
       </Pressable>
 
       <View className="absolute right-4 top-4">
