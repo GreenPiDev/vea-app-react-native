@@ -3,20 +3,21 @@
 // EYE_HEIGHT-locked camera, but the input source is touch (see
 // TouchControls.tsx's joystick + drag-look) instead of PointerLockControls +
 // WASD — mobile has no mouse/keyboard, see CLAUDE.md's "Kontroller — web'den
-// sapma" note. Also reports the nearest in-range artwork each frame so
-// screens/GalleryScreen.tsx can show an RN overlay info card, replacing
-// web's in-3D wall-label Text mesh (unavailable on native, see Artwork.tsx).
+// sapma" note.
+//
+// Per-artwork info used to surface automatically on proximity — client
+// feedback (2026-08-20) changed this to a tap-triggered "i" icon per
+// painting instead (see ArtworkIconProjector.tsx), so that logic was removed
+// from here rather than left dead.
 import { useEffect, useRef, type RefObject } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { EYE_HEIGHT, PLAYER_RADIUS, type ColliderBox } from '../../lib/gallery/galleryLayout';
-import type { Artwork } from '../../lib/gallery/artworks';
 import { useExhibition } from './ExhibitionContext';
 
 const WALK_SPEED = 3.6;
 const LOOK_SENSITIVITY = 0.006; // radians per drag pixel
 const MAX_PITCH = 1.3; // radians, clear of straight up/down
-const PROXIMITY_RADIUS = 2.2; // meters, floor-plane distance to trigger the info card
 
 /** Continuous joystick offset (each axis in [-1, 1]) + accumulated look-drag delta (pixels, consumed/reset every frame) — written by TouchControls.tsx, read here. A ref (not props) so overlay touch handlers never trigger a React re-render on every move sample. */
 export interface TouchControlState {
@@ -26,17 +27,15 @@ export interface TouchControlState {
 
 interface TouchPlayerProps {
   controlState: RefObject<TouchControlState>;
-  onNearestArtworkChange?: (artworkId: string | null) => void;
 }
 
-export default function TouchPlayer({ controlState, onNearestArtworkChange }: TouchPlayerProps) {
+export default function TouchPlayer({ controlState }: TouchPlayerProps) {
   const { camera } = useThree();
-  const { layout, exhibition } = useExhibition();
+  const { layout } = useExhibition();
   const yaw = useRef(layout.playerStartYaw);
   const pitch = useRef(0);
   const forwardDir = useRef(new THREE.Vector3());
   const rightDir = useRef(new THREE.Vector3());
-  const lastNearestId = useRef<string | null>(null);
 
   useEffect(() => {
     camera.position.set(...layout.playerStart);
@@ -74,32 +73,9 @@ export default function TouchPlayer({ controlState, onNearestArtworkChange }: To
       if (dz !== 0 && !collides(pos.x, pos.z + dz, layout.colliders)) pos.z += dz;
       pos.y = EYE_HEIGHT;
     }
-
-    if (onNearestArtworkChange) {
-      const nearest = findNearestArtwork(camera.position, exhibition.artworks ?? []);
-      if (nearest !== lastNearestId.current) {
-        lastNearestId.current = nearest;
-        onNearestArtworkChange(nearest);
-      }
-    }
   });
 
   return null;
-}
-
-function findNearestArtwork(position: THREE.Vector3, artworks: Artwork[]): string | null {
-  let bestId: string | null = null;
-  let bestDist = PROXIMITY_RADIUS;
-  for (const a of artworks) {
-    const dx = position.x - a.position[0];
-    const dz = position.z - a.position[2];
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist < bestDist) {
-      bestDist = dist;
-      bestId = a.id;
-    }
-  }
-  return bestId;
 }
 
 function collides(x: number, z: number, colliders: ColliderBox[]): boolean {

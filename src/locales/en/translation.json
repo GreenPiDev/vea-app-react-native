@@ -20,5 +20,6 @@
   "exhibitionListEmpty": "No published exhibitions yet.",
 
   "galleryBack": "← Back",
-  "galleryUnavailable": "This exhibition can't be displayed yet."
+  "galleryUnavailable": "This exhibition can't be displayed yet.",
+  "artworkInfoIconLabel": "Show artwork info"
 }

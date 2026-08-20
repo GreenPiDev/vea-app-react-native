@@ -20,5 +20,6 @@
   "exhibitionListEmpty": "Henüz yayınlanmış sergi yok.",
 
   "galleryBack": "← Geri",
-  "galleryUnavailable": "Bu sergi henüz görüntülenemiyor."
+  "galleryUnavailable": "Bu sergi henüz görüntülenemiyor.",
+  "artworkInfoIconLabel": "Eser bilgisini göster"
 }

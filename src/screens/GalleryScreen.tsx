@@ -15,6 +15,8 @@ import { ExhibitionProvider } from '../components/3d/ExhibitionContext';
 import Gallery from '../components/3d/Gallery';
 import TouchPlayer, { type TouchControlState } from '../components/3d/TouchPlayer';
 import TouchControls from '../components/3d/TouchControls';
+import ArtworkIconProjector, { type ArtworkIconPosition } from '../components/3d/ArtworkIconProjector';
+import ArtworkInfoIcon from '../components/3d/ArtworkInfoIcon';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Gallery'>;
 
@@ -75,10 +77,18 @@ export function GalleryScreen({ route, navigation }: Props) {
   }, []);
 
   const controlState = useRef<TouchControlState>({ move: { x: 0, y: 0 }, look: { dx: 0, dy: 0 } });
-  const [nearestArtworkId, setNearestArtworkId] = useState<string | null>(null);
-  const nearestArtwork = useMemo(
-    () => exhibition?.artworks?.find((a) => a.id === nearestArtworkId) ?? null,
-    [exhibition, nearestArtworkId]
+
+  // Tap-triggered info, not proximity-triggered (client feedback,
+  // 2026-08-20): each painting gets a blinking "i" icon (projected to
+  // screen space every ~100ms by ArtworkIconProjector, which lives inside
+  // the Canvas since it needs camera access); tapping one opens the info
+  // card below, tapping the same icon again (or the card's close button)
+  // closes it.
+  const [iconPositions, setIconPositions] = useState<ArtworkIconPosition[]>([]);
+  const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
+  const selectedArtwork = useMemo(
+    () => exhibition?.artworks?.find((a) => a.id === selectedArtworkId) ?? null,
+    [exhibition, selectedArtworkId]
   );
 
   if (isLoading) {
@@ -111,11 +121,24 @@ export function GalleryScreen({ route, navigation }: Props) {
         <color attach="background" args={[exhibition.theme.backgroundColor]} />
         <ExhibitionProvider exhibition={exhibition} layout={layout}>
           <Gallery />
-          <TouchPlayer controlState={controlState} onNearestArtworkChange={setNearestArtworkId} />
+          <TouchPlayer controlState={controlState} />
+          <ArtworkIconProjector onPositionsChange={setIconPositions} />
         </ExhibitionProvider>
       </Canvas>
 
       <TouchControls controlState={controlState} />
+
+      {iconPositions
+        .filter((p) => p.visible)
+        .map((p) => (
+          <ArtworkInfoIcon
+            key={p.id}
+            x={p.x}
+            y={p.y}
+            accessibilityLabel={t('artworkInfoIconLabel')}
+            onPress={() => setSelectedArtworkId((current) => (current === p.id ? null : p.id))}
+          />
+        ))}
 
       {/* Small floating control, not a chrome bar — the room should read as
           full-screen. No title text either (see exhibition.name removal):
@@ -126,12 +149,17 @@ export function GalleryScreen({ route, navigation }: Props) {
         <Text style={styles.backButtonText}>{t('galleryBack')}</Text>
       </Pressable>
 
-      {nearestArtwork && (
-        <View pointerEvents="none" style={styles.infoCard}>
-          <Text style={styles.infoCardTitle}>{nearestArtwork.title}</Text>
-          <Text style={styles.infoCardSubtitle}>
-            {nearestArtwork.year ? `${nearestArtwork.artist}, ${nearestArtwork.year}` : nearestArtwork.artist}
-          </Text>
+      {selectedArtwork && (
+        <View style={styles.infoCard}>
+          <View style={styles.infoCardText}>
+            <Text style={styles.infoCardTitle}>{selectedArtwork.title}</Text>
+            <Text style={styles.infoCardSubtitle}>
+              {selectedArtwork.year ? `${selectedArtwork.artist}, ${selectedArtwork.year}` : selectedArtwork.artist}
+            </Text>
+          </View>
+          <Pressable onPress={() => setSelectedArtworkId(null)} hitSlop={10}>
+            <Text style={styles.infoCardClose}>×</Text>
+          </Pressable>
         </View>
       )}
     </View>
@@ -157,11 +185,16 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     bottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     backgroundColor: 'rgba(247,246,242,0.95)',
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
+  infoCardText: { flex: 1 },
   infoCardTitle: { color: '#1a1a1a', fontSize: 15, fontWeight: '600' },
   infoCardSubtitle: { color: '#5a5a5a', fontSize: 13, marginTop: 2 },
+  infoCardClose: { color: '#5a5a5a', fontSize: 22, lineHeight: 22, paddingHorizontal: 4 },
 });
