@@ -78,6 +78,7 @@ function placeAll(
         aspect: link.artwork.widthCm / link.artwork.heightCm,
         height: link.artwork.heightCm / 100,
         heightYOverride: link.positionData?.heightY,
+        alongFraction: link.positionData?.alongFraction,
       }))
     );
     links.forEach((link, i) => artworks.push(toRenderableArtwork(link, exhibitionId, placements[i])));

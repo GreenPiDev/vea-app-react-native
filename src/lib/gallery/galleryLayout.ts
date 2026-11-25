@@ -304,6 +304,8 @@ export interface WallPlacementInput {
   height: number;
   /** Curator-set hang-center height override, in meters from the floor — replaces the FLOOR_CLEARANCE formula below when set (still clamped to the ceiling margin). */
   heightYOverride?: number;
+  /** Curator-set position along the wall run, 0..1 of the run's length, for the artwork's center — replaces its even-slot center when set (still kept clear of the wall's ends). Mirrors vea-frontend. */
+  alongFraction?: number;
 }
 
 export interface WallPlacement {
@@ -313,6 +315,17 @@ export interface WallPlacement {
   rotationY: number;
   /** Actual fitted height in meters (<= input height). */
   height: number;
+}
+
+/** Free wall kept between a run's end and an artwork's edge (same margin vea-frontend's drag limits use). */
+const ALONG_EDGE_MARGIN = WALL_CLEARANCE + 0.2;
+
+/** Keeps an artwork of `width` fully on the run. A run too short for it collapses to its midpoint. */
+function clampAlongCenter(run: WallRunGeometry, width: number, center: number): number {
+  const lo = run.start + ALONG_EDGE_MARGIN + width / 2;
+  const hi = run.end - ALONG_EDGE_MARGIN - width / 2;
+  if (lo > hi) return (run.start + run.end) / 2;
+  return Math.min(hi, Math.max(lo, center));
 }
 
 /**
@@ -334,11 +347,14 @@ export function placeArtworksAlongWall(
   const interior = -run.outward;
 
   return items.map((item, i) => {
-    const slotCenter = run.start + slotLength * (i + 0.5);
     const maxWidth = Math.max(0.6, slotLength - 2 * WALL_CLEARANCE - 0.4);
     let height = item.height;
     if (height * item.aspect > maxWidth) height = maxWidth / item.aspect;
     height = Math.min(height, wallHeight - MIN_CEILING_MARGIN);
+    const slotCenter =
+      item.alongFraction != null
+        ? clampAlongCenter(run, height * item.aspect, run.start + item.alongFraction * runLength)
+        : run.start + slotLength * (i + 0.5);
     const hangCenterY =
       item.heightYOverride != null
         ? Math.max(height / 2, Math.min(item.heightYOverride, wallHeight - height / 2 - CEILING_HEADROOM))

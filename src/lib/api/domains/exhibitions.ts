@@ -31,6 +31,8 @@ export interface ArtworkPositionData {
   wallRunId: string;
   /** Curator-set hang-center height override, in meters from the floor. Falls back to placeArtworksAlongWall()'s fixed floor-clearance formula when unset. */
   heightY?: number;
+  /** Position along the wall run (0..1, artwork center), set by dragging in the web panel's floor plan. Unset = evenly spaced slot. */
+  alongFraction?: number;
 }
 
 export interface ApiExhibitionArtwork {
