@@ -1,8 +1,7 @@
 // Mirrors vea-frontend/src/components/3d/backendAdapter.test.ts (Vitest ->
 // Jest globals port, otherwise identical fixtures/assertions).
 import { adaptApiExhibition, groupByWallRun, wallRunsForSceneConfig } from './backendAdapter';
-import { EXHIBITIONS } from './exhibitions';
-import type { ApiExhibition, ApiExhibitionArtwork } from '../api/domains/exhibitions';
+import type { ApiExhibition, ApiExhibitionArtwork, CustomSceneConfig } from '../api/domains/exhibitions';
 import type { ApiArtwork } from '../api/domains/artworks';
 
 function makeArtwork(overrides: Partial<ApiArtwork> = {}): ApiArtwork {
@@ -60,45 +59,54 @@ function makeExhibition(overrides: Partial<ApiExhibition> = {}): ApiExhibition {
   };
 }
 
+/** A drawn 6 × 4 m room, 6 m high — the only kind of room mobile renders (template rooms aren't ported yet). */
+const ROOM: CustomSceneConfig = {
+  kind: 'custom',
+  cells: Array.from({ length: 6 * 4 }, (_, i) => ({ x: i % 6, z: Math.floor(i / 6) })),
+  wallHeight: 6,
+  wallColor: '#efe4cf',
+  floorColor: '#8a6a45',
+  ceilingColor: '#f7f0e0',
+  spawn: { x: 2, z: 2, yaw: 0 },
+};
+/** The room's longest wall run — every placement test hangs on it. */
+const WALL = [...wallRunsForSceneConfig(ROOM)!].sort((a, b) => b.end - b.start - (a.end - a.start))[0].id;
+
 describe('adaptApiExhibition', () => {
   it('returns null when sceneConfig is missing', () => {
     expect(adaptApiExhibition(makeExhibition({ sceneConfig: null }))).toBeNull();
   });
 
-  it('returns null for a template pointing at an unknown templateId', () => {
+  it('returns null for a template sceneConfig (backend ExhibitionTemplates are not ported to mobile yet)', () => {
     const result = adaptApiExhibition(
-      makeExhibition({ sceneConfig: { kind: 'template', templateId: 'does-not-exist' } })
+      makeExhibition({ sceneConfig: { kind: 'template', templateId: 'renaissance' } })
     );
     expect(result).toBeNull();
   });
 
-  it("builds a template exhibition using the local preset's room/theme and places artworks on named walls", () => {
-    const preset = EXHIBITIONS[0];
+  it('places artworks on the wall run their positionData names', () => {
     const result = adaptApiExhibition(
       makeExhibition({
-        title: 'My Renaissance Room',
-        sceneConfig: { kind: 'template', templateId: preset.id },
-        artworkLinks: [makeLink({ positionData: { wallRunId: 'north' } })],
+        title: 'My Room',
+        sceneConfig: ROOM,
+        artworkLinks: [makeLink({ positionData: { wallRunId: WALL } })],
       })
     );
 
     expect(result).not.toBeNull();
     expect(result!.id).toBe('exhibition-1');
-    expect(result!.name).toBe('My Renaissance Room');
-    expect(result!.roomSize).toEqual(preset.roomSize);
-    expect(result!.wallHeight).toBe(preset.wallHeight);
-    expect(result!.theme).toEqual(preset.theme);
+    expect(result!.name).toBe('My Room');
+    expect(result!.wallHeight).toBe(6);
     expect(result!.artworks).toHaveLength(1);
     expect(result!.artworks![0].frame).toBeNull();
     expect(result!.artworks![0].artist).toBe('Test Artist');
   });
 
   it('uses positionData.heightY as a curator hang-height override when set', () => {
-    const preset = EXHIBITIONS[0];
     const result = adaptApiExhibition(
       makeExhibition({
-        sceneConfig: { kind: 'template', templateId: preset.id },
-        artworkLinks: [makeLink({ positionData: { wallRunId: 'north', heightY: 2.2 } })],
+        sceneConfig: ROOM,
+        artworkLinks: [makeLink({ positionData: { wallRunId: WALL, heightY: 2.2 } })],
       })
     );
 
@@ -106,11 +114,10 @@ describe('adaptApiExhibition', () => {
   });
 
   it("falls back to a Turkish placeholder artist name when artistProfile isn't embedded", () => {
-    const preset = EXHIBITIONS[0];
     const result = adaptApiExhibition(
       makeExhibition({
-        sceneConfig: { kind: 'template', templateId: preset.id },
-        artworkLinks: [makeLink({ artwork: makeArtwork({ artistProfile: undefined }) })],
+        sceneConfig: ROOM,
+        artworkLinks: [makeLink({ positionData: { wallRunId: WALL }, artwork: makeArtwork({ artistProfile: undefined }) })],
       })
     );
 
@@ -146,13 +153,12 @@ describe('adaptApiExhibition', () => {
   });
 
   it('places multiple artworks sharing the same wall run, ordered by the `order` column', () => {
-    const preset = EXHIBITIONS[0];
     const result = adaptApiExhibition(
       makeExhibition({
-        sceneConfig: { kind: 'template', templateId: preset.id },
+        sceneConfig: ROOM,
         artworkLinks: [
-          makeLink({ id: 'link-b', order: 1, artwork: makeArtwork({ id: 'b', title: 'Second' }) }),
-          makeLink({ id: 'link-a', order: 0, artwork: makeArtwork({ id: 'a', title: 'First' }) }),
+          makeLink({ id: 'link-b', order: 1, positionData: { wallRunId: WALL }, artwork: makeArtwork({ id: 'b', title: 'Second' }) }),
+          makeLink({ id: 'link-a', order: 0, positionData: { wallRunId: WALL }, artwork: makeArtwork({ id: 'a', title: 'First' }) }),
         ],
       })
     );
@@ -163,10 +169,9 @@ describe('adaptApiExhibition', () => {
   });
 
   it('ignores links with no positionData (not hung on a wall yet)', () => {
-    const preset = EXHIBITIONS[0];
     const result = adaptApiExhibition(
       makeExhibition({
-        sceneConfig: { kind: 'template', templateId: preset.id },
+        sceneConfig: ROOM,
         artworkLinks: [makeLink({ positionData: null })],
       })
     );
@@ -175,10 +180,9 @@ describe('adaptApiExhibition', () => {
   });
 
   it('treats a missing artworkLinks (e.g. from a list endpoint) as an empty room', () => {
-    const preset = EXHIBITIONS[0];
     const result = adaptApiExhibition(
       makeExhibition({
-        sceneConfig: { kind: 'template', templateId: preset.id },
+        sceneConfig: ROOM,
         artworkLinks: undefined,
       })
     );
@@ -192,15 +196,8 @@ describe('wallRunsForSceneConfig', () => {
     expect(wallRunsForSceneConfig(null)).toBeNull();
   });
 
-  it('returns null for a template pointing at an unknown templateId', () => {
-    expect(wallRunsForSceneConfig({ kind: 'template', templateId: 'does-not-exist' })).toBeNull();
-  });
-
-  it('returns the 4 named walls for a template sceneConfig', () => {
-    const preset = EXHIBITIONS[0];
-    const runs = wallRunsForSceneConfig({ kind: 'template', templateId: preset.id });
-
-    expect(runs?.map((r) => r.id).sort()).toEqual(['east', 'north', 'south', 'west']);
+  it('returns null for a template sceneConfig (not ported to mobile yet)', () => {
+    expect(wallRunsForSceneConfig({ kind: 'template', templateId: 'renaissance' })).toBeNull();
   });
 
   it('returns one run per boundary edge for a custom sceneConfig', () => {

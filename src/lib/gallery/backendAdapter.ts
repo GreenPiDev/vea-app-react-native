@@ -10,7 +10,7 @@ import type {
   CustomSceneConfig,
 } from "../api/domains/exhibitions";
 import type { Artwork } from "./artworks";
-import { EXHIBITIONS, type Exhibition, type ExhibitionTheme } from "./exhibitions";
+import type { Exhibition, ExhibitionTheme } from "./exhibitions";
 import {
   buildCustomRoomLayout,
   placeArtworksAlongWall,
@@ -114,33 +114,29 @@ function buildCustomTheme(config: CustomSceneConfig): ExhibitionTheme {
  * sceneConfig alone (no artworkLinks needed).
  */
 export function previewAccentColor(config: ApiSceneConfig | null): string {
-  if (!config) return "#b9924a";
-  if (config.kind === "template") {
-    return EXHIBITIONS.find((e) => e.id === config.templateId)?.theme.spotColor ?? "#b9924a";
-  }
+  if (!config || config.kind === "template") return "#b9924a";
   return config.wallColor;
 }
 
 /**
  * The wall runs a given sceneConfig produces, regardless of kind. Returns
  * null under the same "can't resolve" conditions as adaptApiExhibition
- * (missing sceneConfig, unknown templateId).
+ * (missing sceneConfig, or a "template" — see there).
  */
 export function wallRunsForSceneConfig(config: ApiSceneConfig | null): (WallRunGeometry & { id: string })[] | null {
   if (!config) return null;
-  if (config.kind === "template") {
-    const template = EXHIBITIONS.find((e) => e.id === config.templateId);
-    if (!template || !template.roomSize) return null;
-    return templateWallRuns(template.roomSize);
-  }
+  if (config.kind === "template") return null;
   return buildCustomRoomLayout(config.cells, config.wallHeight, config.spawn).wallRuns;
 }
 
 /**
  * Converts a backend ApiExhibition (must include artworkLinks — i.e. come
  * from useExhibition(id)) into a renderable Exhibition, or null if it can't
- * be rendered yet (no sceneConfig, or a "template" pointing at an
- * unknown/removed preset id).
+ * be rendered yet: no sceneConfig, or a "template". Web resolves a template
+ * against the org's backend ExhibitionTemplate (exhibition.exhibitionTemplate);
+ * mobile doesn't mirror that yet — and the static presets it used to resolve
+ * instead were removed before launch (2026-11-25) — so template-based
+ * exhibitions don't open on mobile until that port is done.
  */
 export function adaptApiExhibition(exhibition: ApiExhibition): Exhibition | null {
   const config = exhibition.sceneConfig;
@@ -148,18 +144,7 @@ export function adaptApiExhibition(exhibition: ApiExhibition): Exhibition | null
 
   const byWall = groupByWallRun(exhibition.artworkLinks ?? []);
 
-  if (config.kind === "template") {
-    const template = EXHIBITIONS.find((e) => e.id === config.templateId);
-    if (!template || !template.roomSize) return null;
-
-    const runs = templateWallRuns(template.roomSize);
-    return {
-      ...template,
-      id: exhibition.id,
-      name: exhibition.title,
-      artworks: placeAll(runs, template.wallHeight, byWall, exhibition.id),
-    };
-  }
+  if (config.kind === "template") return null;
 
   const { layout, wallRuns } = buildCustomRoomLayout(config.cells, config.wallHeight, config.spawn);
   return {
